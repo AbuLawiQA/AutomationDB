@@ -3,18 +3,17 @@ package utils;
 import com.aventstack.extentreports.ExtentReports;
 import com.aventstack.extentreports.ExtentTest;
 import com.aventstack.extentreports.Status;
-import org.openqa.selenium.WebDriver;
 import org.testng.ITestContext;
 import org.testng.ITestListener;
 import org.testng.ITestResult;
-import tests.E2ETestDB;
-
-import java.io.IOException;
 
 public class ExtentTestNGListener implements ITestListener {
-
     private static ExtentReports extent = ExtentManager.getInstance();
     private static ThreadLocal<ExtentTest> test = new ThreadLocal<>();
+
+    public static ThreadLocal<ExtentTest> getTest() {
+        return test;
+    }
 
     @Override
     public void onTestStart(ITestResult result) {
@@ -24,28 +23,33 @@ public class ExtentTestNGListener implements ITestListener {
 
     @Override
     public void onTestSuccess(ITestResult result) {
-        WebDriver driver = extractDriver(result);
-        if (driver != null) {
-            String screenshotPath = ScreenshotUtils.captureScreenshot(driver, "pass_" + result.getName());
-            test.get().log(Status.PASS, "✅ Test Passed");
-            if (screenshotPath != null) {
-                test.get().addScreenCaptureFromPath(screenshotPath);
-            }
-        } else {
-            test.get().log(Status.PASS, "✅ Test Passed (no driver found)");
+        test.get().log(Status.PASS, "✅ Test Passed");
+
+        try {
+            Object currentClass = result.getInstance();
+            String screenshotPath = ScreenshotUtils.captureScreenshot(
+                    ((tests.E2ETestDB) currentClass).getDriver(),
+                    "pass_" + result.getMethod().getMethodName()
+            );
+            test.get().addScreenCaptureFromPath(screenshotPath);
+        } catch (Exception e) {
+            test.get().log(Status.WARNING, "Unable to attach screenshot on success: " + e.getMessage());
         }
     }
 
-
     @Override
     public void onTestFailure(ITestResult result) {
-        WebDriver driver = extractDriver(result);
-        if (driver != null) {
-            String screenshotPath = ScreenshotUtils.captureScreenshot(driver, "fail_" + result.getName());
-            test.get().log(Status.FAIL, "❌ Test Failed: " + result.getThrowable())
-                    .addScreenCaptureFromPath(screenshotPath);
-        } else {
-            test.get().log(Status.FAIL, "❌ Test Failed: " + result.getThrowable() + " (no driver found)");
+        test.get().log(Status.FAIL, "❌ Test Failed: " + result.getThrowable());
+
+        try {
+            Object currentClass = result.getInstance();
+            String screenshotPath = ScreenshotUtils.captureScreenshot(
+                    ((tests.E2ETestDB) currentClass).getDriver(),
+                    "fail_" + result.getMethod().getMethodName()
+            );
+            test.get().addScreenCaptureFromPath(screenshotPath);
+        } catch (Exception e) {
+            test.get().log(Status.WARNING, "Unable to attach screenshot on failure: " + e.getMessage());
         }
     }
 
@@ -57,13 +61,5 @@ public class ExtentTestNGListener implements ITestListener {
     @Override
     public void onFinish(ITestContext context) {
         extent.flush();
-    }
-
-    private WebDriver extractDriver(ITestResult result) {
-        Object currentClass = result.getInstance();
-        if (currentClass instanceof E2ETestDB) {
-            return ((E2ETestDB) currentClass).getDriver();
-        }
-        return null;
     }
 }
